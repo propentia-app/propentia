@@ -1191,3 +1191,50 @@ button.brand{background:none;border:none;padding:0;cursor:pointer;color:inherit}
 .fn-sl-wd{ height:24px; width:auto; display:block; }
 .fn .ph{ background:var(--n-sup); }
 .fn.f-map-page .f-h1{ font-family:var(--font-display); color:var(--n-ink); font-weight:600; text-transform:none; }
+
+/* Gastos aproximados: cada concepto en su tarjeta (editor) */
+.gasto-item{ border:1px solid var(--line, #D6CEBE); border-radius:var(--radius-m, 12px); padding:12px 14px; display:flex; flex-direction:column; gap:10px; margin:10px 0; }
+.gasto-item.off{ opacity:.6; }
+
+/* Cuadro comparativo (diseño C): una fila por propiedad, alternando el lado de la foto */
+.ficha-page.fn h2{ margin:0; color:inherit; }
+.fn-cr{ display:grid; grid-template-columns:280px 1fr; gap:32px; align-items:center; }
+.fn-cr.flip{ grid-template-columns:1fr 280px; }
+.fn-cr.flip .fn-cr-ph{ order:2; }
+.fn-cr-foto{ display:block; width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:12px; background:var(--n-sup); }
+.fn-cr-info{ display:flex; flex-direction:column; gap:12px; min-width:0; }
+.fn-cr-nom{ font-family:var(--font-display); font-size:24px; line-height:30px; font-weight:600; }
+.fn-cr-mdl{ font-family:var(--font-display); font-size:16px; line-height:24px; font-weight:600; margin-top:2px !important; }
+.fn-cr-cty{ font-family:var(--font-display); font-size:16px; line-height:24px; font-weight:600; }
+.fn-cr-tip{ font-size:14px; line-height:20px; color:var(--n-soft); }
+.fn-mini{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+.fn-mini > div{ background:var(--n-sup); border-radius:12px; padding:12px; display:flex; flex-direction:column; gap:4px; }
+.fn-mini b{ font:600 16px/24px var(--font-display); }
+
+/* Comparativo en la app: filas editables y vista previa */
+.cmp-h{ font:600 20px/26px var(--font-body); margin:28px 0 12px; }
+.cmp-rows{ display:flex; flex-direction:column; gap:12px; }
+.cmp-row{ border:1px solid var(--line, #D6CEBE); border-radius:var(--radius-m, 12px); padding:14px; display:flex; flex-direction:column; gap:12px; background:var(--surface-raised, #ECE7DB); }
+.cmp-row-top{ display:flex; gap:12px; align-items:center; }
+.cmp-row-foto{ width:88px; height:60px; object-fit:cover; border-radius:8px; flex:0 0 88px; }
+.cmp-row-head{ display:flex; gap:10px; align-items:center; min-width:0; }
+.cmp-n{ width:28px; height:28px; border-radius:50%; background:var(--brand); color:var(--on-brand); display:grid; place-items:center; font:600 14px var(--font-body); flex:0 0 28px; }
+.cmp-row-txt{ display:flex; flex-direction:column; min-width:0; }
+.cmp-row-txt strong{ font-weight:600; }
+.cmp-row-txt small{ color:var(--ink-soft, #6E675B); }
+.cmp-row-body{ display:flex; flex-direction:column; gap:8px; }
+.cmp-lbl{ font:600 11px/16px var(--font-body); letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft, #6E675B); }
+.cmp-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+.cmp-chip{ min-height:36px; padding:6px 16px; border-radius:999px; border:1.5px solid var(--line, #D6CEBE); background:transparent; color:var(--ink); cursor:pointer; font:500 14px/20px var(--font-body); }
+.cmp-chip.on{ border-color:var(--accent); color:var(--accent); }
+.cmp-fotos{ display:flex; gap:8px; flex-wrap:wrap; }
+.cmp-foto{ padding:0; border:2px solid transparent; border-radius:8px; background:none; cursor:pointer; width:76px; }
+.cmp-foto img{ display:block; width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:6px; }
+.cmp-foto.on{ border-color:var(--accent); }
+.cmp-row-acts{ display:flex; gap:4px; flex-wrap:wrap; }
+.cmp-choice-txt{ flex:1; min-width:0; display:flex; flex-direction:column; }
+.compare-choice .btn{ flex:0 0 auto; }
+.cmp-tema{ display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+.cmp-preview{ position:relative; overflow:hidden; border-radius:12px; border:1px solid var(--line, #D6CEBE); background:var(--surface-raised, #ECE7DB); }
+.cmp-preview-inner{ position:absolute; top:0; left:0; width:816px; transform-origin:top left; pointer-events:none; }
+.compare-choice{ flex-wrap:wrap; }

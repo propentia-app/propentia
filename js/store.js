@@ -11,6 +11,22 @@
   const LS_LIB = "fichaflow.library.v1";
   const LS_DESIGN = "fichaflow.defaultDesign.v1";
 
+  // Gastos aproximados: una lista de conceptos (cierre, HOA, etc.), cada uno con su monto y su
+  // interruptor, y una leyenda editable. Acepta la forma vieja {activo, concepto, monto} y la convierte.
+  // leyenda sin definir = el texto de siempre; leyenda vacía = no se muestra leyenda.
+  const DEFAULT_LEYENDA_GASTOS = "Esta es una simulación de referencia; el monto real puede variar.";
+  function normalizeGastos(gc) {
+    gc = gc && typeof gc === "object" ? gc : {};
+    const items = Array.isArray(gc.items)
+      ? gc.items.filter(function (it) { return it && typeof it === "object"; }).map(function (it) {
+          return { concepto: typeof it.concepto === "string" ? it.concepto : "", monto: it.monto == null ? "" : it.monto, activo: it.activo !== false };
+        })
+      : [{ concepto: typeof gc.concepto === "string" ? gc.concepto : "", monto: gc.monto == null ? "" : gc.monto, activo: true }];
+    if (!items.length) items.push({ concepto: "", monto: "", activo: true });
+    const out = { activo: !!gc.activo, items: items };
+    if (typeof gc.leyenda === "string") out.leyenda = gc.leyenda;
+    return out;
+  }
   const DEFAULT_LEGAL = "IMÁGENES ÚNICAMENTE ILUSTRATIVAS, LA PROPIEDAD PUEDE NO INCLUIR LO MOSTRADO EN ELLAS. LOS PRECIOS E IMÁGENES AQUÍ MOSTRADAS PUEDEN CAMBIAR SIN PREVIO AVISO Y ESTÁN SUJETOS A DISPONIBILIDAD. EL TIPO DE CAMBIO PUEDE VARIAR SEGÚN LA COMPRA DE DIVISAS.";
 
   function uid() {
@@ -352,7 +368,7 @@
       galeria: defaultGaleria(), // fixed 4 slots: [0] is the main wide image, [1..3] the row below
       pinNombre: "",
       avisoLegal: DEFAULT_LEGAL,
-      gastosCierre: { activo: false, monto: "" },
+      gastosCierre: normalizeGastos(null),
       alturaFoto: "media", // foto principal en el estilo nuevo: baja | media | alta
     };
     const saved = loadDefaultDesign();
@@ -542,7 +558,7 @@
       if (!f.colorModeloPrecioSub) f.colorModeloPrecioSub = "#766D5F";
       if (!f.estiloModeloSpecs) f.estiloModeloSpecs = (firstModelo && firstModelo.estiloSpecs) || defaultTextStyle();
       if (typeof f.avisoLegal !== "string" || !f.avisoLegal.trim()) f.avisoLegal = DEFAULT_LEGAL;
-      if (!f.gastosCierre) f.gastosCierre = { activo: false, monto: "" };
+      f.gastosCierre = normalizeGastos(f.gastosCierre);
       if (["baja", "media", "alta"].indexOf(f.alturaFoto) === -1) f.alturaFoto = "media";
       // Fichas from before the m²/sq ft selector always printed M².
       if (["m2", "sqft", "ambas"].indexOf(f.unidadSuperficie) === -1) f.unidadSuperficie = "m2";
@@ -1161,6 +1177,8 @@
     MAX_MAPAS: MAX_MAPAS,
     DESIGNER_PASSWORD: DESIGNER_PASSWORD,
     DEFAULT_LEGAL: DEFAULT_LEGAL,
+    DEFAULT_LEYENDA_GASTOS: DEFAULT_LEYENDA_GASTOS,
+    normalizeGastos: normalizeGastos,
     LS_DOC: LS_DOC,
     LS_LIB: LS_LIB,
     LS_DESIGN: LS_DESIGN,

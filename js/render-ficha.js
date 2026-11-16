@@ -580,6 +580,15 @@
     ]);
   }
 
+  // En varias fichas guardadas la ciudad y el tipo de propiedad se capturaron al revés
+  // (ciudad = "DEPARTAMENTOS"). Al mostrarlas se acomodan solas; los datos no se tocan.
+  const TIPOS_RE = /^(casas?|departamentos?|deptos?\.?|terrenos?|lotes?|villas?|townhouses?|penthouses?|locales?|local|oficinas?|condominios?)(\s|$)/i;
+  function ciudadYTipo(ficha) {
+    let ciudad = ficha.ciudad || "", tipo = ficha.tipoPropiedad || "";
+    if (TIPOS_RE.test(String(ciudad).trim()) && !TIPOS_RE.test(String(tipo).trim())) { const x = ciudad; ciudad = tipo; tipo = x; }
+    return { ciudad: ciudad, tipo: tipo };
+  }
+
   // Gastos aproximados: acepta la forma vieja (un concepto) y la nueva (lista con interruptores y leyenda editable).
   function gastosDe(ficha) {
     const gc = ficha.gastosCierre;
@@ -588,7 +597,7 @@
       ? gc.items.filter(function (it) { return it && it.activo !== false; })
       : [{ concepto: gc.concepto, monto: gc.monto }];
     if (!items.length) return null;
-    return { items: items, leyenda: typeof gc.leyenda === "string" ? gc.leyenda : "Esta es una simulación de referencia; el monto real puede variar." };
+    return { items: items, leyenda: typeof gc.leyenda === "string" ? gc.leyenda : ((window.Store && Store.DEFAULT_LEYENDA_GASTOS) || "Esta es una simulación de referencia; el monto real puede variar.") };
   }
 
   function renderFichaPageNueva(ficha, doc, isFirst) {
@@ -598,11 +607,12 @@
     const body = [];
 
     // Proyecto: nombre, ciudad destacada, tipo · entrega
-    const tipoEntrega = [comoOracion(ficha.tipoPropiedad), comoOracion(ficha.entrega)].filter(Boolean).join(" · ");
+    const ub = ciudadYTipo(ficha);
+    const tipoEntrega = [comoOracion(ub.tipo), comoOracion(ficha.entrega)].filter(Boolean).join(" · ");
     body.push(h("div", { class: "fn-proy" }, [
       h("h1", { class: "fn-nombre", style: tsN(ficha.estiloTitulo, 56 * gs, 500, 14, 34), text: comoTitulo(ficha.desarrollo) || "Nombre del desarrollo" }),
       h("div", { class: "fn-rayas", "aria-hidden": "true" }, [h("span"), h("span")]),
-      ficha.ciudad ? h("p", { class: "fn-ciudad", style: tsN(ficha.estiloEyebrow, 26 * gs, 600, 14, 13.5), text: comoTitulo(ficha.ciudad) }) : null,
+      ub.ciudad ? h("p", { class: "fn-ciudad", style: tsN(ficha.estiloEyebrow, 26 * gs, 600, 14, 13.5), text: comoTitulo(ub.ciudad) }) : null,
       tipoEntrega ? h("p", { class: "fn-tipo", style: tsN(ficha.estiloTipoBadge, 18 * gs, 400, 14, 12.5), text: tipoEntrega }) : null,
     ]));
 
@@ -730,15 +740,17 @@
       body.push(renderModelBlock(ficha, m, doc, gs));
     });
 
-    const gc = ficha.gastosCierre;
-    if (gc && gc.activo) {
-      body.push(h("div", { class: "f-closing" }, [
-        // Editable concepto (e.g. "HOA mensual"); blank falls back to the
-        // original wording, which is also what every older ficha has.
-        h("span", { class: "lbl", text: ((gc.concepto || "").trim().replace(/:\s*$/, "") || "Gastos aproximados de cierre") + ":" }),
-        h("span", { class: "amt", text: gc.monto ? C.fmtMoney(gc.monto, ficha.moneda) : "$_______" }),
-      ]));
-      body.push(h("div", { class: "f-closing-note", text: "Esta es una simulación de referencia; el monto real puede variar." }));
+    // Gastos aproximados: uno o varios conceptos (cierre, HOA…), cada uno con su monto; solo los prendidos.
+    // Un concepto en blanco usa el texto de siempre; la leyenda es editable (vacía = sin leyenda).
+    const gastos = gastosDe(ficha);
+    if (gastos) {
+      gastos.items.forEach(function (it) {
+        body.push(h("div", { class: "f-closing" }, [
+          h("span", { class: "lbl", text: ((it.concepto || "").trim().replace(/:\s*$/, "") || "Gastos aproximados de cierre") + ":" }),
+          h("span", { class: "amt", text: it.monto ? C.fmtMoney(it.monto, ficha.moneda) : "$_______" }),
+        ]));
+      });
+      if (gastos.leyenda) body.push(h("div", { class: "f-closing-note", text: gastos.leyenda }));
     }
 
     if (ficha.franjaActiva) {
@@ -831,14 +843,105 @@
     ]);
   }
 
+  // ---------- Cuadro comparativo (diseño C: una fila por propiedad, como los modelos de la ficha) ----------
+  // filas = [{ ficha, mi (índice del modelo), fi (índice de la foto) }]. Siempre en el estilo nuevo.
+  // Nada se inventa: lo que no esté capturado se muestra como «—».
+  function ciudadBaseN(c) {
+    const partes = String(c || "").split(" - ");
+    return comoTitulo(partes[partes.length - 1].trim());
+  }
+  function listaConY(a) { return a.length < 2 ? (a[0] || "") : a.slice(0, -1).join(", ") + " y " + a[a.length - 1]; }
+  // «Precio desde»: con tabla por nivel manda el nivel más barato; si no, el precio base.
+  function precioDesdeDe(modelo) {
+    if (modelo.mostrarTablaNivel) {
+      const ps = (modelo.niveles || []).map(function (n) { return C.num(n.precio); }).filter(function (v) { return v > 0; });
+      if (ps.length) return Math.min.apply(null, ps);
+    }
+    return C.num(modelo.precioBase) || 0;
+  }
+  function renderComparativoPage(filas, doc) {
+    const eg = doc.estilosGlobales || {};
+    const t = temaDe(doc);
+    const gs = globalScaleOf(doc);
+    const ciudades = [];
+    filas.forEach(function (f) { const c = ciudadBaseN(ciudadYTipo(f.ficha).ciudad); if (c && ciudades.indexOf(c) < 0) ciudades.push(c); });
+
+    const rows = [];
+    filas.forEach(function (fila, i) {
+      const ficha = fila.ficha;
+      const modelo = (ficha.modelos || [])[fila.mi] || (ficha.modelos || [])[0] || {};
+      const nm = nombreModeloN(modelo.nombre);
+      const gal = (ficha.galeria || []).filter(function (g) { return g && g.src; });
+      const foto = (ficha.galeria || [])[fila.fi] && (ficha.galeria || [])[fila.fi].src ? (ficha.galeria || [])[fila.fi].src : (gal[0] && gal[0].src);
+      const desde = precioDesdeDe(modelo);
+      const p = desde ? precioN(desde, ficha, doc) : null;
+      const area = C.num(modelo.superficieM2) || 0;
+      const sup = area ? C.fmtSurface(modelo.superficieM2, ficha.unidadSuperficie).replace(/M²/g, "m²").replace(/SQ FT/g, "sq ft") : "";
+      const pf = modelo.pagos && modelo.pagos.tipo !== "entrega_inmediata" && (modelo.pagos.filas || []).filter(function (f) { return C.num(f.pct) > 0; })[0];
+      const ub = ciudadYTipo(ficha);
+      const tipoEntrega = [comoOracion(ub.tipo), comoOracion(ficha.entrega)].filter(Boolean).join(" · ");
+      if (i > 0) rows.push(h("div", { class: "fn-sep" }));
+      rows.push(h("article", { class: "fn-cr" + (i % 2 === 1 ? " flip" : "") }, [
+        h("div", { class: "fn-cr-ph" }, [foto ? img(foto, "fn-cr-foto") : h("div", { class: "fn-cr-foto ph", "data-label": "imagen" })]),
+        h("div", { class: "fn-cr-info" }, [
+          h("div", {}, [
+            h("h2", { class: "fn-cr-nom", text: comoTitulo(ficha.desarrollo) || "Proyecto" }),
+            nm.titulo ? h("p", { class: "fn-cr-mdl", text: nm.titulo + (nm.sub ? " · " + nm.sub : "") }) : null,
+            ub.ciudad ? h("p", { class: "fn-cr-cty", text: ciudadBaseN(ub.ciudad) }) : null,
+            tipoEntrega ? h("p", { class: "fn-cr-tip", text: tipoEntrega }) : null,
+          ]),
+          h("div", { class: "fn-specs" }, [
+            h("span", {}, [iconoN("recamara", 24), h("b", { text: modelo.habitaciones || "—" })]),
+            h("span", {}, [iconoN("bano", 24), h("b", { text: modelo.banos || "—" })]),
+            h("span", {}, [iconoN("plano", 24), h("b", { text: sup || "—" })]),
+          ]),
+          h("div", { class: "fn-precio" }, [
+            h("span", { class: "fn-etq", text: "Precio desde" }),
+            h("span", { class: "fn-pv", style: "font-size:28px;line-height:34px;font-weight:600;", text: p ? p.main : "—" }),
+            p && ficha.mostrarConversion ? h("span", { class: "fn-sub", text: p.sub }) : null,
+          ]),
+          h("div", { class: "fn-mini" }, [
+            h("div", {}, [h("span", { class: "fn-etq", text: "Precio por m²" }), h("b", { text: desde && area ? C.fmtMoney(desde / area, ficha.moneda) : "—" })]),
+            h("div", {}, [h("span", { class: "fn-etq", text: "Primer pago" }), h("b", { text: pf ? C.num(pf.pct) + "% " + String(comoOracion(pf.concepto || "")).toLowerCase() : "—" })]),
+          ]),
+        ]),
+      ]));
+    });
+
+    const body = [
+      h("div", { class: "fn-proy" }, [
+        h("h1", { class: "fn-nombre", style: "font-size:" + Math.round(48 * gs) + "px;font-weight:500;", text: "Propiedades" }),
+        h("div", { class: "fn-rayas", "aria-hidden": "true" }, [h("span"), h("span")]),
+        ciudades.length ? h("p", { class: "fn-ciudad", style: "font-size:" + Math.round(22 * gs) + "px;font-weight:600;", text: listaConY(ciudades) }) : null,
+        h("p", { class: "fn-tipo", style: "font-size:16px;", text: "El modelo elegido de cada propiedad, con sus valores tal como se capturaron." }),
+      ]),
+    ].concat(rows);
+    body.push(h("p", { class: "fn-legal", text: "Valores tal como se capturaron en cada ficha. No es una recomendación de inversión. Precios sujetos a cambio y a disponibilidad." }));
+    const logoSello = (typeof doc.brandLogo === "string" && !doc.brandLogo) ? null : img(doc.brandLogo || (t.nombre === "claro" ? LOGO_TINTA_URI : LOGO_DATA_URI), "fn-sl-logo" + (doc.brandLogo ? " custom" : ""));
+    const wm = wordmarkSrc(t.ink);
+    body.push(h("footer", { class: "fn-sello" }, [
+      logoSello, logoSello ? h("span", { class: "fn-sl-sep" }) : null,
+      h("span", { class: "fn-sl-txt", text: "Hecho con" }),
+      wm ? h("img", { class: "fn-sl-wd", src: wm, alt: "Propentia" }) : h("b", { text: "Propentia" }),
+    ]));
+
+    // Encabezado del documento, con el título propio del comparativo.
+    const hdr = renderBrandHeader(Object.assign({}, doc, { tituloEncabezado: "Cuadro\ncomparativo" }));
+    const logo = hdr.querySelector(".f-brand-logo");
+    if (logo) logo.style.height = Math.round(64 * ((eg.tamanoLogo || 100) / 100)) + "px";
+    return h("div", { class: "ficha-page fn fn-cmp tema-" + t.nombre, style: estiloPaginaN(doc) }, [hdr, h("div", { class: "fn-body" }, body)]);
+  }
+
   window.FichaRender = {
     h: h,
     icon: icon,
     textStyleCss: textStyleCss,
     renderFichaPage: renderFichaPage,
+    renderComparativoPage: renderComparativoPage,
     renderMapPage: renderMapPage,
     FONT_OPTIONS: FONT_OPTIONS,
     esNuevo: esNuevo,
     iconoN: iconoN,
+    ciudadYTipo: ciudadYTipo,
   };
 })();

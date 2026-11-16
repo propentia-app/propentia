@@ -93,7 +93,7 @@
     });
   }
 
-  function exportPdf(doc, navigateCurrentTab) {
+  function exportPdf(doc, navigateCurrentTab, opts) {
     if (!window.html2canvas || !window.jspdf) {
       return Promise.reject(new Error("html2canvas/jsPDF no están disponibles (¿sin conexión a internet?)."));
     }
@@ -102,8 +102,9 @@
     host.className = "off-dom";
     document.body.appendChild(host);
 
-    const pages = doc.fichas.map(function (f, i) { return FichaRender.renderFichaPage(f, doc, i === 0); });
-    const hasMap = (doc.mapas || []).some(function (m) { return m.imagen || (m.pines || []).length; });
+    // opts.pages: páginas ya armadas (p. ej. el cuadro comparativo); si no, las fichas del documento y su mapa.
+    const pages = (opts && opts.pages) ? opts.pages.slice() : doc.fichas.map(function (f, i) { return FichaRender.renderFichaPage(f, doc, i === 0); });
+    const hasMap = !(opts && opts.pages) && (doc.mapas || []).some(function (m) { return m.imagen || (m.pines || []).length; });
     if (hasMap) pages.push(FichaRender.renderMapPage(doc));
 
     let pdf = null;
@@ -151,7 +152,7 @@
     return processPage(0).then(function () {
       document.body.removeChild(host);
       if (!pdf) throw new Error("No hay fichas para exportar.");
-      const name = (doc.clientName || "Propentia").trim().replace(/\s+/g, "_") + ".pdf";
+      const name = (opts && opts.name) || ((doc.clientName || "Propentia").trim().replace(/\s+/g, "_") + ".pdf");
       if (navigateCurrentTab) {
         // Verified (with pdf.js, a real independent parser — not just a
         // byte grep) that the generated file itself is correct: valid

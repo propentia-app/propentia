@@ -962,8 +962,8 @@
     } else if (cur === "admin") {
       kids.push(dockBtn("btn-primary", "adelante", "Ir a Inicio", function () { goView("home"); }));
     } else if (cur === "compare") {
-      const pb = dockBtn("btn-primary", "bajar", "Imprimir comparativo", printCompare);
-      pb.disabled = picked.length < 2;
+      const pb = dockBtn("btn-primary", "bajar", "Descargar PDF", function () { const b = document.querySelector(".js-cmp-pdf"); if (b) descargarComparativo(b); });
+      pb.disabled = cmpRows.length < 2;
       kids.push(pb);
       kids.push(dockBtn("", "biblioteca", "Proyectos", function () { goView("projects"); }));
     } else if (cur === "review") {
@@ -2292,14 +2292,34 @@
     }
 
     container.appendChild(h("div", { class: "block-divider", style: "margin-top:10px;" }));
-    if (!ficha.gastosCierre) ficha.gastosCierre = { activo: false, monto: "" };
-    container.appendChild(toggleRow("Gastos aproximados de cierre", "Panel opcional debajo del esquema de pago, con una leyenda de que es una simulación.", ficha.gastosCierre.activo,
-      function (v) { ficha.gastosCierre.activo = v; persistStruct(); }));
-    if (ficha.gastosCierre.activo) {
-      container.appendChild(textField("Concepto", ficha.gastosCierre.concepto || "", function (v) { ficha.gastosCierre.concepto = v; persistSilently(); },
-        { placeholder: "Gastos aproximados de cierre", noUppercase: true, hint: "Cámbialo si es otro concepto, por ejemplo \"HOA mensual\". Vacío = el texto de siempre." }));
-      container.appendChild(moneyField("Monto aproximado", ficha.gastosCierre.monto, ficha.moneda, function (v) { ficha.gastosCierre.monto = v; persistSilently(); },
-        { hint: "Déjalo vacío para mostrar solo la línea en blanco a llenar a mano." }));
+    // Gastos aproximados: varios conceptos (cierre, HOA…), cada uno con su monto y su interruptor,
+    // y una leyenda editable. Las fichas viejas (un solo concepto) se convierten aquí mismo.
+    ficha.gastosCierre = S.normalizeGastos(ficha.gastosCierre);
+    const gc = ficha.gastosCierre;
+    container.appendChild(toggleRow("Gastos aproximados", "Panel opcional debajo del esquema de pago: cierre, HOA u otros conceptos, cada uno con su monto.", gc.activo,
+      function (v) { gc.activo = v; persistStruct(); }));
+    if (gc.activo) {
+      gc.items.forEach(function (it, i) {
+        const card = h("div", { class: "gasto-item" + (it.activo ? "" : " off") }, [
+          toggleRow("Concepto " + (i + 1), it.activo ? "Se muestra en la ficha." : "Apagado: no se muestra en la ficha.", it.activo,
+            function (v) { it.activo = v; persistStruct(); }),
+          textField("Concepto", it.concepto || "", function (v) { it.concepto = v; persistSilently(); },
+            { placeholder: "Gastos aproximados de cierre", noUppercase: true, hint: "Por ejemplo \"HOA mensual\". Vacío = el texto de siempre." }),
+          moneyField("Monto aproximado", it.monto, ficha.moneda, function (v) { it.monto = v; persistSilently(); },
+            { hint: "Déjalo vacío para mostrar solo la línea en blanco a llenar a mano." }),
+        ]);
+        if (gc.items.length > 1) {
+          const quitar = h("button", { class: "btn btn-sm btn-danger", type: "button", text: "Quitar este concepto" });
+          quitar.addEventListener("click", function () { gc.items.splice(i, 1); persistStruct(); });
+          card.appendChild(quitar);
+        }
+        container.appendChild(card);
+      });
+      const agregar = h("button", { class: "btn btn-sm", type: "button", text: "+ Agregar otro concepto" });
+      agregar.addEventListener("click", function () { gc.items.push({ concepto: "", monto: "", activo: true }); persistStruct(); });
+      container.appendChild(agregar);
+      container.appendChild(textField("Leyenda", gc.leyenda !== undefined ? gc.leyenda : S.DEFAULT_LEYENDA_GASTOS, function (v) { gc.leyenda = v; persistSilently(); },
+        { noUppercase: true, hint: "Se muestra debajo de los conceptos. Bórrala para no mostrar leyenda." }));
     }
   }
 
@@ -3131,7 +3151,7 @@
     [
       ["Ficha de proyecto", "Captura un proyecto nuevo y revisa su ficha en vivo.", "doc", newProject],
       ["Reutilizar un proyecto", "Parte de una página que ya guardaste en la biblioteca.", "project", function () { goView("projects"); }],
-      ["Cuadro comparativo", "Revisa lado a lado dos o tres proyectos de tu biblioteca.", "compare", function () { goView("compare"); }],
+      ["Cuadro comparativo", "Revisa lado a lado los proyectos y modelos que elijas, sin límite.", "compare", function () { goView("compare"); }],
     ].forEach(function (a) {
       const c = h("button", { type: "button", class: "action-card", html: '<span class="action-icon">' + mi(a[2]) + '</span><div><h3></h3><p></p></div>' });
       c.querySelector("h3").textContent = a[0]; c.querySelector("p").textContent = a[1];
@@ -3181,7 +3201,7 @@
     }
     input.addEventListener("input", function () { projSearch = input.value; fill(); });
     root.appendChild(h("div", { class: "toolbar" }, [search, chips]));
-    root.appendChild(h("div", { class: "section-head" }, [count, h("span", { class: "muted", text: "Marca hasta tres para agregarlos o compararlos" })]));
+    root.appendChild(h("div", { class: "section-head" }, [count, h("span", { class: "muted", text: "Marca los que quieras para agregarlos o compararlos" })]));
     if (libLoading(state) && state.library.length) root.appendChild(libLoaderEl(state));
     root.appendChild(grid);
     fill();
@@ -3250,65 +3270,146 @@
     return root;
   }
 
-  function compareTable(ps, forPrint) {
-    const rows = [
-      ["Precio", function (p) { return p.price ? money(p.price, p.cur) : "—"; }],
-      ["Superficie", function (p) { return p.area ? p.area + " m²" : "—"; }],
-      ["Precio por m²", function (p) { return p.price && p.area ? money(p.price / p.area, p.cur) : "—"; }],
-      ["Recámaras", function (p) { return p.beds || "—"; }],
-      ["Baños", function (p) { return p.baths || "—"; }],
-      ["Entrega", function (p) { return p.delivery || "—"; }],
-      ["Primer pago", function (p) { return p.deposit || "—"; }],
-      ["Modelos en la ficha", function (p) { return String(p.models); }],
-    ];
-    const wrap = h("div", { class: forPrint ? "cmp-sheet" : "table-wrap" });
-    let html = "<table class=\"data-table" + (ps.length > 3 ? " cmp-many" : "") + "\"><thead><tr><th>CARACTERÍSTICA</th>" + ps.map(function (p) { return '<th><strong class="cmp-name">' + esc(p.name) + "</strong><br><span class=\"muted\">" + esc(p.city) + "</span></th>"; }).join("") + "</tr></thead><tbody>";
-    rows.forEach(function (r) { html += "<tr><td>" + r[0] + "</td>" + ps.map(function (p) { return "<td>" + esc(r[1](p)) + "</td>"; }).join("") + "</tr>"; });
-    wrap.innerHTML = html + "</tbody></table>";
-    return wrap;
-  }
-  function printCompare() {
-    const ps = libPick.map(function (id) { return state_lib(id); }).filter(Boolean).map(infoOf);
-    if (ps.length < 2) return;
-    const box = h("div", { id: "cmp-print" }, [h("h2", { text: "Cuadro comparativo" }), compareTable(ps, true), h("p", { class: "muted", text: "Se compara el primer modelo de cada ficha, con los valores tal como los capturaste." })]);
-    document.body.appendChild(box);
-    document.body.classList.add("printing-compare");
-    function done() { document.body.classList.remove("printing-compare"); box.remove(); window.removeEventListener("afterprint", done); }
-    window.addEventListener("afterprint", done);
-    window.print();
-  }
+  // =========================================================
+  // CUADRO COMPARATIVO — una fila por propiedad (diseño C). Cada fila = proyecto + modelo elegido + foto.
+  // El mismo proyecto puede entrar varias veces con modelos distintos. Sin tope de filas.
+  // Se imprime como PDF con el mismo encabezado y tema (claro u oscuro) que las fichas.
+  // =========================================================
+  let cmpRows = []; // [{ entryId, mi (modelo), fi (foto) }]
   function state_lib(id) { return S.state.library.find(function (e) { return e.id === id; }); }
+  // Lo marcado en la biblioteca (o en «Comparar N») entra como filas nuevas, una sola vez.
+  function cmpSeedFromPick() {
+    libPick.forEach(function (id) {
+      if (state_lib(id) && !cmpRows.some(function (r) { return r.entryId === id; })) cmpRows.push({ entryId: id, mi: 0, fi: 0 });
+    });
+    libPick = [];
+  }
+  function cmpFilas() {
+    return cmpRows.map(function (r) {
+      const e = state_lib(r.entryId);
+      return e ? { ficha: e.ficha, mi: r.mi, fi: r.fi, row: r, entry: e } : null;
+    }).filter(Boolean);
+  }
+  function cmpPagina() {
+    return FichaRender.renderComparativoPage(cmpFilas().map(function (f) { return { ficha: f.ficha, mi: f.mi, fi: f.fi }; }), S.state.document);
+  }
+  // Vista previa de la página a todo el ancho disponible (la página real mide 816 px).
+  function cmpPreview(pageEl) {
+    const box = h("div", { class: "cmp-preview" });
+    const inner = h("div", { class: "cmp-preview-inner" }, [pageEl]);
+    box.appendChild(inner);
+    requestAnimationFrame(function () {
+      const k = Math.min(1, (box.clientWidth || 600) / 816);
+      pageEl.style.width = "816px";
+      inner.style.transform = "scale(" + k + ")";
+      box.style.height = Math.round(pageEl.offsetHeight * k) + "px";
+    });
+    return box;
+  }
+  function descargarComparativo(btn) {
+    if (!Auth.require("Inicia sesión o crea tu cuenta para descargar tu PDF.")) return;
+    if (cmpFilas().length < 2 || btn.disabled) return;
+    btn.disabled = true; Loaders.busy(btn, true);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const cliente = (S.state.document.clientName || "").trim().replace(/\s+/g, "_");
+    PdfExport.exportPdf(S.state.document, isIOS, { pages: [cmpPagina()], name: "Comparativo" + (cliente ? "_" + cliente : "") + ".pdf" }).then(function () {
+      toast(isIOS ? "PDF listo. Elige dónde abrirlo o a quién enviárselo." : "PDF del comparativo descargado.");
+    }).catch(function (err) {
+      console.error(err);
+      toast("No se pudo generar el PDF del comparativo.");
+    }).then(function () { btn.disabled = false; Loaders.busy(btn, false); });
+  }
+
+  function cmpFilaEditor(f, i, total) {
+    const ficha = f.ficha, r = f.row;
+    const info = infoOf(f.entry);
+    const gal = (ficha.galeria || []).map(function (g, gi) { return { g: g, gi: gi }; }).filter(function (x) { return x.g && x.g.src; });
+    const foto = (ficha.galeria || [])[r.fi] && ficha.galeria[r.fi].src ? ficha.galeria[r.fi].src : (gal[0] && gal[0].g.src);
+    const head = h("div", { class: "cmp-row-head" }, [
+      h("span", { class: "cmp-n", text: String(i + 1) }),
+      h("div", { class: "cmp-row-txt" }, [h("strong", { text: info.name }), h("small", { text: FichaRender.ciudadYTipo(ficha).ciudad || "Ubicación por definir" })]),
+    ]);
+    const acciones = h("div", { class: "cmp-row-acts" });
+    const arriba = textBtn(null, "Subir", function () { const x = cmpRows.splice(i, 1)[0]; cmpRows.splice(i - 1, 0, x); render(); });
+    const abajo = textBtn(null, "Bajar", function () { const x = cmpRows.splice(i, 1)[0]; cmpRows.splice(i + 1, 0, x); render(); });
+    arriba.disabled = i === 0; abajo.disabled = i === total - 1;
+    const quitar = textBtn("trash", "Quitar", function () { cmpRows.splice(i, 1); render(); });
+    [arriba, abajo, quitar].forEach(function (b) { acciones.appendChild(b); });
+
+    const cuerpo = [head];
+    if (foto) cuerpo.unshift(h("img", { class: "cmp-row-foto", src: foto, alt: "" }));
+    const bloque = [];
+    if ((ficha.modelos || []).length > 1) {
+      bloque.push(h("div", { class: "cmp-lbl", text: "Modelo a comparar" }));
+      bloque.push(h("div", { class: "cmp-chips" }, ficha.modelos.map(function (m, mi) {
+        const nm = String(m.nombre || "Modelo " + (mi + 1)).split("\n")[0];
+        const b = h("button", { type: "button", class: "cmp-chip" + (mi === r.mi ? " on" : ""), "aria-pressed": mi === r.mi ? "true" : "false", text: nm });
+        b.addEventListener("click", function () { r.mi = mi; render(); });
+        return b;
+      })));
+    }
+    if (gal.length > 1) {
+      bloque.push(h("div", { class: "cmp-lbl", text: "Foto principal" }));
+      bloque.push(h("div", { class: "cmp-fotos" }, gal.map(function (x) {
+        const b = h("button", { type: "button", class: "cmp-foto" + (x.gi === r.fi ? " on" : ""), "aria-label": "Usar la foto " + (x.gi + 1), "aria-pressed": x.gi === r.fi ? "true" : "false" }, [h("img", { src: x.g.src, alt: "" })]);
+        b.addEventListener("click", function () { r.fi = x.gi; render(); });
+        return b;
+      })));
+    }
+    return h("div", { class: "cmp-row" }, [
+      h("div", { class: "cmp-row-top" }, cuerpo),
+      h("div", { class: "cmp-row-body" }, bloque),
+      acciones,
+    ]);
+  }
 
   function viewCompare(state) {
-    libPick = libPick.filter(function (id) { return !!state_lib(id); });
-    const ps = libPick.map(state_lib).map(infoOf);
+    cmpSeedFromPick();
+    const filas = cmpFilas();
+    cmpRows = filas.map(function (f) { return f.row; }); // quita filas de proyectos que ya no existen
     const root = h("div", {});
-    const pr = mBtn("btn-primary", "download", "Imprimir / PDF", printCompare);
-    pr.disabled = ps.length < 2;
-    root.appendChild(pageHeading("Comparar proyectos", "Selecciona dos o más opciones y revisa lo que cambia.", [pr]));
+    const pr = mBtn("btn-primary js-cmp-pdf", "download", "Descargar PDF", function () { descargarComparativo(pr); });
+    pr.disabled = filas.length < 2;
+    root.appendChild(pageHeading("Comparar proyectos", "Elige las propiedades, el modelo y la foto de cada una. El PDF se arma solo, con tu marca.", [pr]));
+
+    // 1) Lo que se compara
+    root.appendChild(h("h2", { class: "cmp-h", text: "Tu comparativo" + (filas.length ? " · " + filas.length : "") }));
+    if (!filas.length) {
+      root.appendChild(h("div", { class: "help-box", text: "Aún no eliges propiedades. Agrégalas desde la lista de abajo; puedes agregar el mismo proyecto varias veces con modelos distintos." }));
+    } else {
+      root.appendChild(h("div", { class: "cmp-rows" }, filas.map(function (f, i) { return cmpFilaEditor(f, i, filas.length); })));
+    }
+
+    // 2) Agregar
+    root.appendChild(h("h2", { class: "cmp-h", text: "Agregar propiedades" }));
     const grid = h("div", { class: "compare-grid" });
     if (!state.library.length && libLoading(state)) grid.appendChild(libLoaderEl(state));
     else if (!state.library.length) grid.appendChild(emptyState("compare", "Aún no hay proyectos para comparar", "Guarda fichas en la biblioteca desde el editor y podrás compararlas aquí.", mBtn("btn-primary", null, "Ir al editor", function () { goView("editor"); })));
     state.library.forEach(function (e) {
       const p = infoOf(e);
-      const lab = h("label", { class: "compare-choice", html: '<input type="checkbox"><div><strong></strong><small></small></div>' });
-      const cb = lab.querySelector("input");
-      cb.checked = libPick.indexOf(e.id) >= 0;
-      lab.querySelector("strong").textContent = p.name;
-      lab.querySelector("small").textContent = p.city || "Ubicación por definir";
-      if (p.photo) { const img = document.createElement("img"); img.alt = ""; img.src = p.photo; lab.insertBefore(img, lab.querySelector("div")); }
-      cb.addEventListener("change", function () {
-        if (cb.checked) {
-          if (libPick.length >= LIB_MAX_PICK) { cb.checked = false; toast("Puedes comparar hasta " + LIB_MAX_PICK + " proyectos."); return; }
-          libPick.push(e.id);
-        } else libPick = libPick.filter(function (id) { return id !== e.id; });
-        render();
-      });
-      grid.appendChild(lab);
+      const veces = cmpRows.filter(function (r) { return r.entryId === e.id; }).length;
+      const card = h("div", { class: "compare-choice" }, [
+        p.photo ? h("img", { src: p.photo, alt: "" }) : null,
+        h("div", { class: "cmp-choice-txt" }, [h("strong", { text: p.name }), h("small", { text: (FichaRender.ciudadYTipo(e.ficha).ciudad || "Ubicación por definir") + (veces ? " · en el comparativo: " + veces : "") })]),
+      ]);
+      const add = mBtn("btn-sm", "plus", veces ? "Agregar otra vez" : "Agregar", function () { cmpRows.push({ entryId: e.id, mi: 0, fi: 0 }); render(); });
+      card.appendChild(add);
+      grid.appendChild(card);
     });
     root.appendChild(grid);
-    root.appendChild(ps.length < 2 ? h("div", { class: "help-box", text: "Selecciona al menos dos proyectos para ver su comparativo." }) : compareTable(ps, false));
-    root.appendChild(h("p", { class: "muted", style: "margin-top:20px;", text: "Se compara el primer modelo de cada ficha, con los valores tal como los capturaste. No se recomiendan inversiones ni se predicen rendimientos." }));
+
+    // 3) Vista previa
+    root.appendChild(h("h2", { class: "cmp-h", text: "Así se verá el PDF" }));
+    if (filas.length < 2) root.appendChild(h("div", { class: "help-box", text: "Elige al menos dos propiedades para ver el comparativo." }));
+    else {
+      const d = S.state.document;
+      root.appendChild(h("div", { class: "cmp-tema" }, [
+        h("div", { class: "field-label", text: "Versión del PDF" }),
+        segmented([{ value: "claro", label: "PDF claro" }, { value: "oscuro", label: "PDF oscuro" }], d.temaPdf === "oscuro" ? "oscuro" : "claro", function (v) { d.temaPdf = v; persistStruct(); }),
+      ]));
+      root.appendChild(cmpPreview(cmpPagina()));
+    }
+    root.appendChild(h("p", { class: "muted", style: "margin-top:20px;", text: "Se compara el modelo elegido de cada propiedad, con los valores tal como los capturaste. No se recomiendan inversiones ni se predicen rendimientos." }));
     return root;
   }
 
