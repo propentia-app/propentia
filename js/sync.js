@@ -39,6 +39,74 @@
     });
   }
 
+  // ---------------------------------------------------------------
+  // COPIA LOCAL DE LA BIBLIOTECA (IndexedDB aparte: "propentia-cache")
+  // Antes, cada vez que se abría la app se bajaban TODAS las páginas con todas
+  // sus imágenes (unos 175 MB con 29 proyectos) y eso gastó el ancho de banda
+  // del plan. Ahora cada página se guarda en este dispositivo la primera vez y
+  // en las siguientes aperturas solo se baja lo que sea nuevo o haya cambiado.
+  //
+  // Reglas para que NUNCA se pierda ni se muestre algo equivocado:
+  //  - La lista ligera (id, fecha, nombre) sigue pidiéndose SIEMPRE a Supabase:
+  //    ella decide qué páginas existen. Lo que no esté en la lista no se muestra
+  //    aunque siga en la copia, y se borra de la copia.
+  //  - Una página de la copia solo se usa si su fecha (saved_at) es idéntica a la
+  //    de la lista; si no, se baja de nuevo.
+  //  - Solo se guarda una página si TODAS sus imágenes llegaron completas.
+  //  - La copia es de lectura para la app: nunca se sube nada desde ella, y
+  //    cualquier fallo de IndexedDB se ignora (se baja como antes).
+  //  - Está separada por usuario y se borra al cerrar sesión.
+  // ---------------------------------------------------------------
+  const CACHE_DB = "propentia-cache", CACHE_STORE = "library", CACHE_VER = 1;
+  let cacheDbPromise = null;
+  function cacheOpen() {
+    if (cacheDbPromise) return cacheDbPromise;
+    cacheDbPromise = new Promise(function (resolve) {
+      try {
+        if (!window.indexedDB) { resolve(null); return; }
+        const req = indexedDB.open(CACHE_DB, 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore(CACHE_STORE, { keyPath: "key" }); };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = req.onblocked = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+    return cacheDbPromise;
+  }
+  // Ejecuta una operación sobre el store; cualquier error devuelve null en vez de lanzar.
+  function cacheOp(mode, fn) {
+    return cacheOpen().then(function (db) {
+      if (!db) return null;
+      return new Promise(function (resolve) {
+        try {
+          const tx = db.transaction(CACHE_STORE, mode);
+          const store = tx.objectStore(CACHE_STORE);
+          const req = fn(store);
+          tx.oncomplete = function () { resolve(req && "result" in req ? req.result : true); };
+          tx.onerror = tx.onabort = function () { resolve(null); };
+        } catch (e) { resolve(null); }
+      });
+    });
+  }
+  function cacheKey(userId, id) { return userId + ":" + id; }
+  function cacheGet(userId, id) {
+    return cacheOp("readonly", function (st) { return st.get(cacheKey(userId, id)); });
+  }
+  function cachePut(userId, id, savedAt, ficha) {
+    return cacheOp("readwrite", function (st) { return st.put({ key: cacheKey(userId, id), v: CACHE_VER, savedAt: savedAt, ficha: ficha }); });
+  }
+  function cacheDelete(userId, id) {
+    return cacheOp("readwrite", function (st) { return st.delete(cacheKey(userId, id)); });
+  }
+  function cacheKeysOf(userId) {
+    return cacheOp("readonly", function (st) { return st.getAllKeys(IDBKeyRange.bound(userId + ":", userId + ":￿")); }).then(function (k) { return k || []; });
+  }
+  function clearLibraryCache() {
+    return cacheOp("readwrite", function (st) { return st.clear(); });
+  }
+  function samePage(rec, row) {
+    return !!rec && rec.v === CACHE_VER && rec.ficha && String(rec.savedAt) === String(row.saved_at);
+  }
+
   // Fetching every row's full `ficha` (images and all) in one query can
   // add up to tens of MB combined once the library has several pages —
   // Supabase's statement timeout then cancels the whole query, and the
@@ -53,6 +121,7 @@
   // onProgress({total, loaded, entries}) se llama cada vez que termina una página, para ir
   // mostrándolas sin esperar a todas.
   function loadLibraryRemote(onProgress) {
+    const uidPromise = currentUserId().catch(function () { return null; }); // para la copia local
     // Si la base todavía no tiene la columna user_id (antes de correr supabase-cuentas.sql), se lee sin ella.
     return client.from("library_pages").select("id, saved_at, name, user_id").order("saved_at", { ascending: true }).then(function (res) {
       if (res.error && res.error.code === "42703") return client.from("library_pages").select("id, saved_at, name").order("saved_at", { ascending: true });
@@ -68,8 +137,24 @@
       }
       report();
 
-      // Carga una página completa (su fila + sus imágenes). Devuelve true si quedó cargada.
+      // Una página: primero se busca en la copia local de este dispositivo (solo vale si su
+      // fecha es idéntica a la de la lista); si no está o cambió, se baja de Supabase.
       function loadOne(i) {
+        const row = rows[i];
+        return uidPromise.then(function (uid) {
+          const buscar = uid ? cacheGet(uid, row.id) : Promise.resolve(null);
+          return buscar.then(function (rec) {
+            if (samePage(rec, row)) {
+              results[i] = { id: row.id, savedAt: row.saved_at, name: row.name || "", ownerId: row.user_id, ficha: rec.ficha };
+              return true;
+            }
+            return loadOneRemote(i, uid);
+          });
+        });
+      }
+
+      // Carga una página completa desde Supabase (su fila + sus imágenes). Devuelve true si quedó cargada.
+      function loadOneRemote(i, uid) {
         const row = rows[i];
         return client.from("library_pages").select("ficha").eq("id", row.id).maybeSingle().then(function (full) {
           if (full.error || !full.data) return false;
@@ -83,6 +168,10 @@
             const ficha = reinsertAssets(Object.assign({}, shellFicha), assetMap);
             delete ficha.__assetIds;
             results[i] = { id: row.id, savedAt: row.saved_at, name: row.name || "", ownerId: row.user_id, ficha: ficha };
+            // A la copia local solo entra una página COMPLETA: si alguna imagen no llegó (falla
+            // pasajera), no se guarda, para no dejar una página sin imágenes para siempre.
+            const completa = assetIds.every(function (aid) { return assetMap[aid] != null; });
+            if (uid && completa) cachePut(uid, row.id, row.saved_at, ficha);
             return true;
           });
         }).catch(function () { return false; });
@@ -110,7 +199,18 @@
           });
         });
         return chain;
-      }).then(function () { return attachOwnerEmails(results.filter(Boolean)); });
+      }).then(function () {
+        // Lo que ya no existe en Supabase (borrado desde otro dispositivo) se quita de la copia local.
+        uidPromise.then(function (uid) {
+          if (!uid) return;
+          const vivos = {};
+          rows.forEach(function (r) { vivos[cacheKey(uid, r.id)] = true; });
+          return cacheKeysOf(uid).then(function (keys) {
+            keys.forEach(function (k) { if (!vivos[k]) cacheOp("readwrite", function (st) { return st.delete(k); }); });
+          });
+        }).catch(function () {});
+        return attachOwnerEmails(results.filter(Boolean));
+      });
     });
   }
 
@@ -212,12 +312,16 @@
     return client.from("library_pages").insert({ id: entry.id, saved_at: entry.savedAt, name: entry.name || null, ficha: shellFicha }).then(function (res) {
       if (res.error) throw res.error;
       return writeOrderedRows("library_page_assets", "data", "page_id", entry.id, assets);
+    }).then(function () {
+      // Ya está en Supabase: se guarda también aquí para no tener que bajarla en la próxima apertura.
+      currentUserId().then(function (uid) { cachePut(uid, entry.id, entry.savedAt, entry.ficha || {}); }).catch(function () {});
     });
   }
 
   function removeLibraryEntryRemote(id) {
     return client.from("library_pages").delete().eq("id", id).then(function (res) {
       if (res.error) throw res.error;
+      currentUserId().then(function (uid) { cacheDelete(uid, id); }).catch(function () {});
     });
   }
 
@@ -478,6 +582,7 @@
     listLibrarySharesRemote: listLibrarySharesRemote,
     unshareLibraryEntryRemote: unshareLibraryEntryRemote,
     loadLibraryRemote: loadLibraryRemote,
+    clearLibraryCache: clearLibraryCache,
     addLibraryEntryRemote: addLibraryEntryRemote,
     removeLibraryEntryRemote: removeLibraryEntryRemote,
     renameLibraryEntryRemote: renameLibraryEntryRemote,

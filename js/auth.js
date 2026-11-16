@@ -311,7 +311,8 @@
       currentUser = session ? session.user : null;
       if (event === "PASSWORD_RECOVERY") recovering = true;
       if (event === "SIGNED_OUT") {
-        if (booted) window.location.reload();
+        // La copia local de la biblioteca es de esta cuenta: se borra al salir.
+        Promise.resolve(Sync.clearLibraryCache()).catch(function () {}).then(function () { if (booted) window.location.reload(); });
         return;
       }
       if (recovering && session) {
