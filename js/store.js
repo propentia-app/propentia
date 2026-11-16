@@ -99,10 +99,12 @@
     "colorShowroom", "colorShowroomTexto", "estiloShowroom", "colorDivisorModelo", "grosorDivisorModelo", "estiloTitulo", "estiloEyebrow", "estiloFranja",
     "estiloPagoConcepto", "colorPagoConcepto", "estiloPagoMomento", "colorPagoMomento",
     "estiloPagoMonto", "colorPagoMonto", "estiloPagoMontoSub", "colorPagoMontoSub",
+    "alturaFoto",
   ];
   const GLOBAL_DESIGN_FIELDS = [
     "paperColor", "paperImage", "textScale", "fontFamily",
     "estiloHeaderTitulo", "estiloHeaderPara", "estiloHeaderElaboradoPor",
+    "densidad", "tamanoLogo", "colorAcento", "colorAcentoOscuro",
   ];
   // Plano/información size lives on each modelo (not the ficha) so they
   // can differ modelo-to-modelo — but a brand-new modelo still needs a
@@ -351,6 +353,7 @@
       pinNombre: "",
       avisoLegal: DEFAULT_LEGAL,
       gastosCierre: { activo: false, monto: "" },
+      alturaFoto: "media", // foto principal en el estilo nuevo: baja | media | alta
     };
     const saved = loadDefaultDesign();
     if (saved) {
@@ -390,6 +393,11 @@
       estiloHeaderTitulo: defaultTextStyle(), // "Análisis de propiedades"
       estiloHeaderPara: defaultTextStyle(),   // "Para: cliente"
       estiloHeaderElaboradoPor: defaultTextStyle(), // "Elaborado por: asesor"
+      // Solo los usa el estilo nuevo de la ficha:
+      densidad: "normal",   // compacta | normal | amplia
+      tamanoLogo: 100,      // % del logo del encabezado
+      colorAcento: "",      // "" = terracota del manual (#A4573D)
+      colorAcentoOscuro: "", // "" = terracota clara (#D08A6C)
     };
     const saved = loadDefaultDesign();
     if (saved) applyDesignFields(eg, saved.estilosGlobales, GLOBAL_DESIGN_FIELDS);
@@ -414,6 +422,10 @@
       // Blank = the usual "Análisis de propiedades" header title.
       tituloEncabezado: "",
       exchangeRate: 17.5,
+      // Los documentos nuevos salen con el estilo nuevo (manual Propentia 2.2); los que ya existían
+      // se quedan en "clasico" hasta que alguien los actualice con el botón.
+      estiloFicha: "nuevo",
+      temaPdf: "claro", // claro | oscuro (solo estilo nuevo)
       fichas: [],
       mapas: defaultMapasList(),
       designerMode: false,
@@ -450,6 +462,9 @@
     if (typeof parsed.advisorName !== "string") parsed.advisorName = "";
     if (typeof parsed.tituloEncabezado !== "string") parsed.tituloEncabezado = "";
     if (typeof parsed.designerMode !== "boolean") parsed.designerMode = false;
+    // Sin este dato = documento hecho antes del estilo nuevo: se queda en el clásico.
+    if (parsed.estiloFicha !== "nuevo" && parsed.estiloFicha !== "clasico") parsed.estiloFicha = "clasico";
+    if (parsed.temaPdf !== "oscuro") parsed.temaPdf = "claro";
     if (!parsed.estilosGlobales) parsed.estilosGlobales = defaultEstilosGlobales();
     const eg = parsed.estilosGlobales;
     if (eg.paperColor === undefined) eg.paperColor = "#F1ECE2";
@@ -459,6 +474,10 @@
     if (!eg.estiloHeaderTitulo) eg.estiloHeaderTitulo = defaultTextStyle();
     if (!eg.estiloHeaderPara) eg.estiloHeaderPara = defaultTextStyle();
     if (!eg.estiloHeaderElaboradoPor) eg.estiloHeaderElaboradoPor = defaultTextStyle();
+    if (["compacta", "normal", "amplia"].indexOf(eg.densidad) === -1) eg.densidad = "normal";
+    if (typeof eg.tamanoLogo !== "number") eg.tamanoLogo = 100;
+    if (typeof eg.colorAcento !== "string") eg.colorAcento = "";
+    if (typeof eg.colorAcentoOscuro !== "string") eg.colorAcentoOscuro = "";
 
     (parsed.fichas || []).forEach(function (f) {
       // The separate "imagen principal" upload was folded into the fixed
@@ -524,6 +543,7 @@
       if (!f.estiloModeloSpecs) f.estiloModeloSpecs = (firstModelo && firstModelo.estiloSpecs) || defaultTextStyle();
       if (typeof f.avisoLegal !== "string" || !f.avisoLegal.trim()) f.avisoLegal = DEFAULT_LEGAL;
       if (!f.gastosCierre) f.gastosCierre = { activo: false, monto: "" };
+      if (["baja", "media", "alta"].indexOf(f.alturaFoto) === -1) f.alturaFoto = "media";
       // Fichas from before the m²/sq ft selector always printed M².
       if (["m2", "sqft", "ambas"].indexOf(f.unidadSuperficie) === -1) f.unidadSuperficie = "m2";
       (f.botones || []).forEach(function (b) {

@@ -1110,3 +1110,84 @@ button.brand{background:none;border:none;padding:0;cursor:pointer;color:inherit}
   .ld-draw .w{ stroke-dashoffset:0; } .ld-draw .dot{ opacity:1; transform:none; }
   .ld-flow .w{ stroke-dasharray:1; stroke-dashoffset:0; opacity:.5; }
 }
+
+/* =========================================================
+   FICHA · ESTILO NUEVO (manual Propentia 2.2) — .ficha-page.fn
+   Colores por tema (claro / oscuro) en variables --n-*, puestas por
+   render-ficha.js; densidad en --n-gap / --n-pad. Todo en la tipografía
+   del documento (Outfit por defecto).
+   ========================================================= */
+.ficha-page.fn{ background:var(--n-bg); color:var(--n-ink); font-family:var(--font-body); gap:0; padding:0 0 var(--n-pad); line-height:1.5; }
+.ficha-page.fn *{ box-sizing:border-box; }
+.ficha-page.fn h1,.ficha-page.fn h3,.ficha-page.fn p,.ficha-page.fn ul{ margin:0; color:inherit; }
+.ficha-page.fn .fn-ciudad{ color:var(--n-ink); }
+/* Terracota (acento) solo en: rayas bajo el nombre, íconos, enganche, puntos de franja y último nivel */
+.fn-rayas{ display:flex; flex-direction:column; align-items:center; gap:12px; margin:8px 0 4px; }
+.fn-rayas span{ display:block; width:48px; height:3px; border-radius:2px; background:var(--n-tc); }
+.fn-rayas span + span{ width:72px; height:4px; }
+.ficha-page.fn .fn-specs .fn-ic, .ficha-page.fn .fn-btn .fn-ic{ color:var(--n-tc); }
+.ficha-page.fn .fn-legal,.ficha-page.fn .fn-gn,.ficha-page.fn .fn-msub{ color:var(--n-soft); }
+.fn .f-brand-header{ color:#F2EEE6; }
+.fn .f-brand-title,.fn .f-brand-for,.fn .f-brand-by{ font-family:var(--font-display); }
+.fn .f-brand-for,.fn .f-brand-by{ text-transform:none; }
+.fn .f-brand-by{ opacity:1; }
+.fn .f-brand-logo{ display:block; margin:16px auto 0; width:auto; }
+.fn-body{ display:flex; flex-direction:column; gap:var(--n-gap); padding:var(--n-pad) var(--n-pad) 0; }
+.fn-etq{ font:600 11px/16px var(--font-display); letter-spacing:.14em; text-transform:uppercase; color:var(--n-soft); }
+.fn-proy{ display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; }
+.fn-nombre{ font-family:var(--font-display); line-height:1.1; letter-spacing:-.02em; }
+.fn-ciudad{ font-family:var(--font-display); color:var(--n-ink); line-height:1.25; }
+.fn-tipo{ font-family:var(--font-display); color:var(--n-ink); line-height:1.5; }
+.fn-mos{ display:flex; flex-direction:column; gap:8px; }
+.fn-mos img,.fn-mos .ph{ display:block; width:100%; object-fit:cover; border-radius:12px; background:var(--n-sup); }
+.fn-mr{ display:flex; gap:8px; }
+.fn-mr > *{ flex:1; min-width:0; aspect-ratio:4/3; }
+.fn-ctas{ display:flex; gap:16px; }
+.fn-btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:8px 24px; border-radius:999px; border:1.5px solid var(--n-ink); color:var(--n-ink); background:transparent; font-family:var(--font-display); text-decoration:none; white-space:nowrap; line-height:24px; }
+.fn-ctas .fn-btn{ flex:1 1 0; min-width:0; }
+.fn-ic{ display:inline-flex; color:currentColor; }
+.fn-ic svg{ display:block; }
+.fn-franja{ display:flex; align-items:center; justify-content:center; gap:12px; background:var(--n-ink); color:var(--n-bg); border-radius:22px; padding:16px 24px; text-align:center; font-family:var(--font-display); line-height:1.5; }
+.fn-dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--n-ink); flex:0 0 8px; }
+.fn-dot.tc{ background:var(--n-tc); }
+.fn-sep{ height:1px; background:var(--n-line); }
+.fn-modelo{ display:flex; flex-direction:column; gap:24px; }
+.fn-mrow{ display:flex; gap:32px; align-items:center; }
+.fn-mrow.flip{ flex-direction:row-reverse; }
+.fn-mrow.sin-plano{ justify-content:center; }
+.fn-pl{ flex:0 0 auto; max-width:50%; }
+.fn-pl img{ display:block; width:100%; background:none; border:0; border-radius:0; box-shadow:none; }
+.fn-mi{ flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:12px; }
+.fn-mnom{ font-family:var(--font-display); line-height:1.25; }
+.fn-msub{ font-size:14px; line-height:20px; color:var(--n-soft); margin-top:-8px !important; }
+.fn-specs{ display:flex; gap:16px; align-items:center; flex-wrap:wrap; font-family:var(--font-display); }
+.fn-specs span{ display:flex; align-items:center; gap:8px; }
+.fn-specs .fn-ic{ color:var(--n-soft); }
+.fn-precio{ display:flex; flex-direction:column; gap:4px; }
+.fn-pv{ font-family:var(--font-display); line-height:1.2; }
+.fn-sub{ color:var(--n-soft); line-height:1.45; }
+.fn-tabla{ border:1px solid var(--n-line); border-radius:12px; overflow:hidden; }
+.fn-th{ display:flex; justify-content:space-between; padding:12px 16px; background:var(--n-sup2); color:var(--n-ink); }
+.fn-tr{ display:flex; justify-content:space-between; align-items:center; gap:16px; padding:12px 16px; border-top:1px solid var(--n-line); }
+.fn-nv{ display:flex; align-items:center; gap:12px; font-weight:600; font-family:var(--font-display); }
+.fn-npr{ display:flex; flex-direction:column; align-items:flex-end; text-align:right; }
+.fn-pago{ display:flex; flex-direction:column; gap:12px; }
+.fn-bar{ display:flex; gap:4px; height:48px; }
+.fn-sg{ display:flex; align-items:center; justify-content:center; font-weight:600; border-radius:999px; background:var(--n-sup2); color:var(--n-ink); font-family:var(--font-display); min-width:0; }
+.fn-sg.s0{ background:var(--n-tc); color:var(--n-on-tc); }
+.fn-pago ul{ list-style:none; padding:0; display:grid; gap:16px; }
+.fn-pago li{ display:flex; flex-direction:column; gap:2px; }
+.fn-contado{ background:var(--n-sup); border-radius:12px; padding:16px 24px; text-align:center; font-family:var(--font-display); }
+.fn-gastos{ border:1px solid var(--n-line); border-radius:12px; padding:16px 24px; display:flex; flex-direction:column; }
+.fn-gastos .fn-etq{ margin-bottom:4px; }
+.fn-gr{ display:flex; justify-content:space-between; align-items:baseline; gap:16px; padding:12px 0; border-bottom:1px solid var(--n-line); font-size:16px; }
+.fn-gr b{ font:600 20px/28px var(--font-display); }
+.fn-gn{ margin-top:12px !important; font-size:14px; line-height:20px; color:var(--n-soft); }
+.fn-legal{ font-size:14px; line-height:20px; color:var(--n-soft); text-align:center; max-width:68ch; margin:0 auto !important; }
+.fn-sello{ display:flex; align-items:center; justify-content:center; gap:16px; }
+.fn-sl-logo{ height:24px; width:auto; display:block; }
+.fn-sl-sep{ width:1px; height:24px; background:var(--n-line); }
+.fn-sl-txt{ font-size:14px; color:var(--n-soft); }
+.fn-sl-wd{ height:24px; width:auto; display:block; }
+.fn .ph{ background:var(--n-sup); }
+.fn.f-map-page .f-h1{ font-family:var(--font-display); color:var(--n-ink); font-weight:600; text-transform:none; }

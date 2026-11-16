@@ -301,6 +301,32 @@
     return wrap;
   }
 
+  // Estilo de la ficha (clásico / nuevo) y tema del PDF (claro / oscuro).
+  // Los documentos viejos siguen en el clásico hasta que alguien pulse «Actualizar al estilo nuevo».
+  function estiloFichaPanel(doc) {
+    if (doc.estiloFicha !== "nuevo") {
+      const up = h("button", { type: "button", class: "btn btn-primary btn-sm", text: "Actualizar al estilo nuevo" });
+      up.addEventListener("click", function () {
+        doc.estiloFicha = "nuevo";
+        if (!doc.temaPdf) doc.temaPdf = "claro";
+        persistStruct();
+        toast("Listo: este documento ya usa el estilo nuevo. Puedes regresar al clásico cuando quieras.", 3600);
+      });
+      return h("div", { class: "help-box estilo-panel" }, [
+        h("strong", { text: "Este documento usa el estilo clásico de la ficha." }),
+        h("p", { style: "margin:6px 0 12px;", text: "Con un clic lo pasas al estilo nuevo de Propentia. No se borra nada: tus datos, fotos e interruptores se quedan igual, y puedes regresar al clásico." }),
+        up,
+      ]);
+    }
+    const back = h("button", { type: "button", class: "textbtn", text: "Regresar al estilo clásico" });
+    back.addEventListener("click", function () { doc.estiloFicha = "clasico"; persistStruct(); });
+    return h("div", { class: "estilo-panel estilo-panel-nuevo" }, [
+      h("div", { class: "field-label", text: "Versión del PDF" }),
+      segmented([{ value: "claro", label: "PDF claro" }, { value: "oscuro", label: "PDF oscuro" }], doc.temaPdf === "oscuro" ? "oscuro" : "claro", function (v) { doc.temaPdf = v; persistStruct(); }),
+      back,
+    ]);
+  }
+
   function toggleRow(title, desc, checked, onChange) {
     const cb = h("input", { type: "checkbox" });
     cb.checked = !!checked;
@@ -1184,10 +1210,27 @@
     // Global
     const eg = doc.estilosGlobales;
     const globalSection = h("div", { class: "modal-section" }, [h("h3", { text: "Documento completo" })]);
+    globalSection.appendChild(estiloFichaPanel(doc));
+    if (doc.estiloFicha === "nuevo") {
+      globalSection.appendChild(field("Densidad", segmented([{ value: "compacta", label: "Compacta" }, { value: "normal", label: "Normal" }, { value: "amplia", label: "Amplia" }], eg.densidad || "normal", function (v) { eg.densidad = v; persistStruct(); }),
+        "Junta o separa todo a la vez. Compacta ayuda a que una ficha con muchos modelos ocupe menos."));
+      globalSection.appendChild(rangeField("Tamaño del logo del encabezado", eg.tamanoLogo || 100, 60, 160, function (v) { eg.tamanoLogo = v; persistSilently(); }));
+      const acc = h("input", { type: "color", class: "input", style: "max-width:120px; height:38px; padding:2px;" });
+      acc.value = eg.colorAcento || "#A4573D";
+      acc.addEventListener("input", function () { eg.colorAcento = acc.value; persistSilently(); });
+      const accD = h("input", { type: "color", class: "input", style: "max-width:120px; height:38px; padding:2px;" });
+      accD.value = eg.colorAcentoOscuro || "#D08A6C";
+      accD.addEventListener("input", function () { eg.colorAcentoOscuro = accD.value; persistSilently(); });
+      const accReset = h("button", { type: "button", class: "textbtn", text: "Usar los de Propentia" });
+      accReset.addEventListener("click", function () { eg.colorAcento = ""; eg.colorAcentoOscuro = ""; persistStruct(); });
+      globalSection.appendChild(field("Color de acento (rayas bajo el nombre, íconos, enganche y puntos)", h("div", { style: "display:flex; gap:12px; align-items:center; flex-wrap:wrap;" }, [
+        h("span", { class: "field-label", text: "PDF claro" }), acc, h("span", { class: "field-label", text: "PDF oscuro" }), accD, accReset,
+      ]), "Por defecto, la terracota del manual. Puedes poner el color de tu marca."));
+    }
     const bgInput = h("input", { type: "color", class: "input", style: "max-width:120px; height:38px; padding:2px;" });
     bgInput.value = eg.paperColor || "#DFDAD5";
     bgInput.addEventListener("input", function () { eg.paperColor = bgInput.value; persistSilently(); });
-    globalSection.appendChild(field("Color de fondo de todas las páginas", bgInput, eg.paperImage ? "Se usa mientras no haya imagen de fondo." : null));
+    globalSection.appendChild(field("Color de fondo de todas las páginas", bgInput, doc.estiloFicha === "nuevo" ? "Solo en el estilo clásico. En el estilo nuevo el fondo lo da la versión del PDF (claro u oscuro)." : (eg.paperImage ? "Se usa mientras no haya imagen de fondo." : null)));
 
     const bgImgSlot = uploadSlot(eg.paperImage, "Subir imagen de fondo", function (dataUrl) {
       eg.paperImage = dataUrl; persistStruct();
@@ -1258,6 +1301,9 @@
     }
 
     const ficha = S.getFicha(state.designerFichaId);
+    if (doc.estiloFicha === "nuevo") {
+      fichaSection.appendChild(field("Tamaño de la foto principal", segmented([{ value: "baja", label: "Baja" }, { value: "media", label: "Media" }, { value: "alta", label: "Alta" }], ficha.alturaFoto || "media", function (v) { ficha.alturaFoto = v; persistStruct(); }), null));
+    }
 
     // Presets — apply a whole look (colors, fonts, sizes) to what you're
     // editing right now with one click, or save the current look under a
@@ -2402,6 +2448,7 @@
   function renderStepReview(state) {
     const d = state.document;
     const list = h("div", { class: "review-list" });
+    list.appendChild(estiloFichaPanel(d));
     d.fichas.forEach(function (f, i) {
       const prog = S.fichaProgress(f);
       const up = h("button", { class: "btn-icon btn-ghost", type: "button", text: "↑" });
