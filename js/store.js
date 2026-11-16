@@ -739,38 +739,13 @@
   // pdf-export.js's waitForImages) means a slow/stuck image just gets
   // synced uncompressed instead of blocking everything else.
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  // La compresión en sí vive en js/imagenes.js (reduce a 1600 px, pasa a JPEG lo que no
+  // tiene transparencia y nunca devuelve algo más pesado que el original). Aquí solo se
+  // le pone el tope de tiempo: si una imagen tarda demasiado, se sube tal cual.
   function compressDataUrlForSync(dataUrl) {
     if (typeof dataUrl !== "string" || dataUrl.indexOf("data:image/") !== 0) return Promise.resolve(dataUrl);
-    const compressed = new Promise(function (resolve) {
-      const img = new Image();
-      img.onload = function () {
-        const w = img.naturalWidth, h = img.naturalHeight;
-        if (!w || !h || (w <= SYNC_MAX_IMAGE_DIM && h <= SYNC_MAX_IMAGE_DIM)) { resolve(dataUrl); return; }
-        const scale = Math.min(SYNC_MAX_IMAGE_DIM / w, SYNC_MAX_IMAGE_DIM / h);
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(w * scale);
-        canvas.height = Math.round(h * scale);
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        // JPEG has no alpha channel — flattening a plano with an erased
-        // (transparent) background onto one turns every see-through pixel
-        // solid BLACK instead of leaving it transparent. Only take the
-        // smaller JPEG when there's genuinely nothing transparent to lose;
-        // a plano (or anything else with real transparency) gets PNG
-        // instead, even though it compresses less.
-        let hasAlpha = false;
-        try {
-          const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-          for (let i = 3; i < data.length; i += 4) {
-            if (data[i] < 255) { hasAlpha = true; break; }
-          }
-        } catch (e) { /* tainted/unsupported canvas — fall back to JPEG below */ }
-        resolve(hasAlpha ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.82));
-      };
-      img.onerror = function () { resolve(dataUrl); };
-      img.src = dataUrl;
-    });
-    return Promise.race([compressed, wait(4000).then(function () { return dataUrl; })]);
+    if (!window.ImageOpt) return Promise.resolve(dataUrl);
+    return Promise.race([window.ImageOpt.optimize(dataUrl), wait(8000).then(function () { return dataUrl; })]);
   }
   function compressImagesForSync(value) {
     if (Array.isArray(value)) return Promise.all(value.map(compressImagesForSync));
