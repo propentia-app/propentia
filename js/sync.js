@@ -21,8 +21,8 @@
 (function () {
   "use strict";
 
-  const SUPABASE_URL = "https://nmsojsniefxjcuwcjner.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tc29qc25pZWZ4amN1d2NqbmVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3MDY2MzcsImV4cCI6MjEwMzI4MjYzN30.C6fPikSBjG56-z4BcvMLzi59zgxA-SbKCgf712nptis";
+  const SUPABASE_URL = "https://ujujimdhfsgaxnfhwzoh.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqdWppbWRoZnNnYXhuZmh3em9oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ3ODM1MzMsImV4cCI6MjExMDM1OTUzM30.QLa7tFpCWAeyfJnPavrOYrW8HMG-Gn1x4b1ZvG-DD1A";
 
   // Se lee ANTES de createClient: el cliente consume por su cuenta el #...type=recovery
   // del enlace de "olvidé mi contraseña" y podría borrarlo antes de que auth.js lo vea.
